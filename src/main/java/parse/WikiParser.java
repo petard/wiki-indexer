@@ -24,16 +24,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class WikiParser implements IThreadedWorker<WikiPage> {
     private static Logger logger = LoggerFactory.getLogger(WikiParser.class);
 
-    public static final int WORKING_QUEUE_CAPACITY = 1000;
+    public static final int WORKING_QUEUE_CAPACITY = 100000;
 
     private Queue<WikiPage> workingQueue;
     private WikiXMLParser wikiXMLParser;
     private AtomicInteger counter;
-
+    private boolean isDone = false;
 
     public WikiParser(String filename) {
         wikiXMLParser = WikiXMLParserFactory.getSAXParser(filename);
-        workingQueue = new ArrayBlockingQueue<WikiPage>(WORKING_QUEUE_CAPACITY);
+        workingQueue = new ArrayBlockingQueue<>(WORKING_QUEUE_CAPACITY);
     }
 
     @Override
@@ -51,6 +51,7 @@ public class WikiParser implements IThreadedWorker<WikiPage> {
             @Override
             public Void call() throws Exception {
                 wikiXMLParser.parse();
+                isDone = true;
                 return null;
             }
         });
@@ -59,13 +60,13 @@ public class WikiParser implements IThreadedWorker<WikiPage> {
     }
 
     @Override
-    public int processCount() {
-        return null == counter ? 0 : counter.get();
+    public WikiPage pollQueue() {
+        return workingQueue.poll();
     }
 
     @Override
-    public WikiPage pollQueue() {
-        return workingQueue.poll();
+    public boolean isDone() {
+        return isDone;
     }
 
     @Override

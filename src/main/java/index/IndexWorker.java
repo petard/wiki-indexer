@@ -28,12 +28,13 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class IndexWorker implements IThreadedWorker<Void> {
     private static Logger logger = LoggerFactory.getLogger(IndexWorker.class);
-    private static final int THREAD_WAIT = 10000;
-    private static final int MAX_RETRIES = 5;
+    private static final int THREAD_WAIT = 1000;
 
     private AtomicInteger counter;
     private final File outputDir;
-    IThreadedWorker<Document> extractorWorker;
+
+    private boolean isDone = false;
+    private IThreadedWorker<Document> extractorWorker;
 
     public IndexWorker(IThreadedWorker<Document> extractorWorker, File outputDir) {
         this.outputDir = outputDir;
@@ -59,11 +60,7 @@ public class IndexWorker implements IThreadedWorker<Void> {
 
         future.get();
         writer.close();
-    }
-
-    @Override
-    public int processCount() {
-        return null == counter ? 0 : counter.get();
+        isDone = true;
     }
 
     private void consumeQueue(IndexWriter writer) throws InterruptedException, IOException {
@@ -71,14 +68,13 @@ public class IndexWorker implements IThreadedWorker<Void> {
         while (true) {
             Document document = extractorWorker.pollQueue();
             if (null == document) {
+                if (extractorWorker.isDone()) {
+                    break;
+                }
                 emptyPollCount++;
-                logger.info("Waiting on extractor. Retry count {}", emptyPollCount);
+                logger.debug("Waiting on extractor. Retry count {}", emptyPollCount);
                 Thread.sleep(THREAD_WAIT);
                 continue;
-            }
-            if (MAX_RETRIES <= emptyPollCount) {
-                logger.info("Retries exhausted.");
-                break;
             }
             emptyPollCount = 0;
             writer.addDocument(document);
@@ -88,7 +84,12 @@ public class IndexWorker implements IThreadedWorker<Void> {
 
     @Override
     public Void pollQueue() {
-        throw new UnsupportedOperationException("not implemented");
+        throw new UnsupportedOperationException("No queue for this worker");
+    }
+
+    @Override
+    public boolean isDone() {
+        return isDone;
     }
 
     @Override

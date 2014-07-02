@@ -23,25 +23,25 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Date: 30.06.14
  * Time: 08:26
  */
-public class WikiExtractor implements IThreadedWorker<Document>{
-    private static Logger logger = LoggerFactory.getLogger(WikiExtractor.class);
+public class WikiExtractor implements IThreadedWorker<Document> {
+    public static final String FIELD_TITLE = "title";
+    public static final String FIELD_CONTRIBUTOR = "contributor";
+    public static final String FIELD_BODY = "body";
+    private static final int THREAD_WAIT = 1000;
 
-    private static final int MAX_RETRIES = 5;
-    private static final int WORKING_QUEUE_CAPACITY = 1000;
-    private static final int THREAD_WAIT = 10000;
-    private static final String FIELD_TITLE = "title";
-    private static final String FIELD_CONTRIBUTOR = "contributor";
-    private static final String FIELD_BODY = "body";
+    private static Logger logger = LoggerFactory.getLogger(WikiExtractor.class);
+    private static final int WORKING_QUEUE_CAPACITY = 10000;
+    private final IThreadedWorker<WikiPage> parseWorker;
 
     private AtomicInteger counter;
 
     private Queue<Document> workingQueue;
 
-    private final IThreadedWorker<WikiPage> parseWorker;
+    private boolean isDone = false;
 
     public WikiExtractor(IThreadedWorker<WikiPage> parseWorker) {
         this.parseWorker = parseWorker;
-        workingQueue = new ArrayBlockingQueue<Document>(WORKING_QUEUE_CAPACITY);
+        workingQueue = new ArrayBlockingQueue<>(WORKING_QUEUE_CAPACITY);
     }
 
     public void start() throws Exception {
@@ -51,6 +51,7 @@ public class WikiExtractor implements IThreadedWorker<Document>{
             @Override
             public Void call() throws Exception {
                 consumeQueue();
+                isDone = true;
                 return null;
             }
         });
@@ -58,24 +59,18 @@ public class WikiExtractor implements IThreadedWorker<Document>{
         executor.submit(futureTask);
     }
 
-    @Override
-    public int processCount() {
-        return null == counter ? 0 : counter.get();
-    }
-
     private void consumeQueue() throws InterruptedException {
         int emptyPollCount = 0;
         while (true) {
             WikiPage wikiPage = parseWorker.pollQueue();
             if (null == wikiPage) {
+                if (parseWorker.isDone()) {
+                    break;
+                }
                 emptyPollCount++;
-                logger.info("Waiting on parser. Retry count {}", emptyPollCount);
+                logger.debug("Waiting on parser. Retry count {}", emptyPollCount);
                 Thread.sleep(THREAD_WAIT);
                 continue;
-            }
-            if (MAX_RETRIES <= emptyPollCount) {
-                logger.info("Retries exhausted.");
-                break;
             }
             emptyPollCount = 0;
             if (null == wikiPage.getContributor()) {
@@ -92,11 +87,16 @@ public class WikiExtractor implements IThreadedWorker<Document>{
         return workingQueue.poll();
     }
 
+    @Override
+    public boolean isDone() {
+        return isDone;
+    }
+
     private Document getDocument(WikiPage wikiPage) {
         Document document = new Document();
         Field title = new StringField(FIELD_TITLE, wikiPage.getTitle(), Field.Store.YES);
         document.add(title);
-        Field contributor = new StringField(FIELD_CONTRIBUTOR, wikiPage.getContributor(), Field.Store.NO);
+        Field contributor = new TextField(FIELD_CONTRIBUTOR, wikiPage.getContributor(), Field.Store.NO);
         document.add(contributor);
         Field body = new TextField(FIELD_BODY, wikiPage.getText(), Field.Store.NO);
         document.add(body);

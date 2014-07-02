@@ -13,10 +13,14 @@ public interface IThreadedWorker<T> {
      */
     void start() throws Exception;
 
-    int processCount();
-
     /**
      * Polls queue for latest parser wiki pages
      */
     T pollQueue();
+
+    /**
+     *
+     * @return true if work is done
+     */
+    boolean isDone();
 }

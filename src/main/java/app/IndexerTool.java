@@ -20,14 +20,15 @@ import java.util.concurrent.FutureTask;
  * Date: 01.07.14
  * Time: 21:34
  */
-public class RunnerTool {
+public class IndexerTool {
 
-    private static Logger logger = LoggerFactory.getLogger(RunnerTool.class);
+    private static Logger logger = LoggerFactory.getLogger(IndexerTool.class);
 
     public static void main(String[] args) throws Exception {
 
         File wikipedia = null;
-        File outputDir = new File("./enwiki");
+        File outputDir = null;
+        int debugMessageTimer = 10000;
         for (int i = 0; i < args.length; i++) {
             String arg = args[i];
             if (arg.equals("--input") || arg.equals("-i")) {
@@ -36,10 +37,13 @@ public class RunnerTool {
             } else if (arg.equals("--output") || arg.equals("-o")) {
                 outputDir = new File(args[i + 1]);
                 i++;
+            } else if (arg.equals("--debugTimer") || arg.equals("-dt")) {
+                debugMessageTimer = Integer.parseInt(args[i + 1]);
+                i++;
             }
         }
 
-        if(null == wikipedia){
+        if (null == wikipedia || null == outputDir) {
             printUsage();
             System.exit(-1);
         }
@@ -48,7 +52,7 @@ public class RunnerTool {
         parseWorker.start();
         IThreadedWorker<Document> wikiExtractor = new WikiExtractor(parseWorker);
         wikiExtractor.start();
-        final IThreadedWorker<Void> indexWorker = new IndexWorker(wikiExtractor,outputDir);
+        final IThreadedWorker<Void> indexWorker = new IndexWorker(wikiExtractor, outputDir);
         ExecutorService executor = Executors.newSingleThreadExecutor();
         FutureTask<Void> futureTask = new FutureTask<Void>(new Callable<Void>() {
             @Override
@@ -61,19 +65,26 @@ public class RunnerTool {
 
         long startTime = System.currentTimeMillis();
 
-        while(true) {
+        while (!parseWorker.isDone() &&
+                !wikiExtractor.isDone() &&
+                !indexWorker.isDone()) {
             long currTime = System.currentTimeMillis() - startTime;
             logger.info("--------------------");
-            logger.info("Articles parsed: {}", parseWorker.processCount());
-            logger.info("Docs extracted: {}", wikiExtractor.processCount());
-            logger.info("Docs indexed: {}", indexWorker.processCount());
+            logger.info("Articles parsed: {}", parseWorker);
+            logger.info("Docs extracted: {}", wikiExtractor);
+            logger.info("Docs indexed: {}", indexWorker);
             logger.info("Elapsed: {} ms", currTime);
-            Thread.sleep(1000);
+            if (indexWorker.isDone()) {
+                break;
+            }
+            Thread.sleep(debugMessageTimer);
         }
+        long currTime = System.currentTimeMillis() - startTime;
+        logger.info("Finished Indexing. Elapsed time: {} ms", currTime);
     }
 
     private static void printUsage() {
-        System.err.println("Usage: java -cp <...> org.apache.lucene.benchmark.utils.ExtractWikipedia --input|-i <Path to Wikipedia XML file> " +
+        System.err.println("Usage: java -cp <...> app.IndexerTool --input|-i <Path to Wikipedia XML file> " +
                 "[--output|-o <Output Path>]");
     }
 
