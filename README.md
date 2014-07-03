@@ -7,7 +7,7 @@ Small wiki indexing/searching tool.
   `mvn install`
 
 #### Indexing
-  `jar wiki-indexer-[version]-jar-with-dependencies.jar app.IndexerTool --input < wiki xml dump > --output < index output folder>`
+  `java -cp wiki-indexer-[version]-jar-with-dependencies.jar app.IndexerTool --input < wiki xml dump > --output < index output folder>`
 
 #### Searching
-  `jar wiki-indexer-[version]-jar-with-dependencies.jar app.SearchTool -index  < index folder >`
+  `java -cp wiki-indexer-[version]-jar-with-dependencies.jar app.SearchTool -index  < index folder >`
